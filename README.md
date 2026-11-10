@@ -83,6 +83,9 @@ python3 scripts/render_film.py /tmp/film_data.pkl demo_showcase.mp4
 
 **`demo_showcase.mp4` — 1920×1080, 60 fps, 55 s, H.264, 2.8 MB, silent.**
 
+[▶ Watch / download the film](https://github.com/DECRUX9812/opticraft-cad/releases/download/v1.0.0/demo_showcase.mp4)
+· poster frame: [`docs/screenshots/poster.png`](docs/screenshots/poster.png)
+
 | Act | Time | What is on screen |
 |---|---|---|
 | 1 · the proof | 0–10 s | the convergence table (3.1e-08 mm) and the singlet caustic: marginal rays crossing 5.3 mm short of the paraxial focus |
