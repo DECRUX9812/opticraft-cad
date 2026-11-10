@@ -1,0 +1,7 @@
+# The engine needs only numpy; the bench and the film need Pillow.
+# FastAPI/uvicorn are optional: app.py falls back to stdlib http.server.
+numpy>=1.26,<3
+Pillow>=10,<14
+# optional, for the FastAPI flavour of the bench:
+# fastapi>=0.110,<1
+# uvicorn>=0.27,<1

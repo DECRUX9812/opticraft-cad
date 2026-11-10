@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opticraft · optical design workbench</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #111721;
+    --panel2: #151c28;
+    --rule: #26303f;
+    --text: #e2e9f3;
+    --dim: #8090a2;
+    --dimmer: #566173;
+    --amber: #ffbe5c;
+    --green: #62dc98;
+    --red: #ff7470;
+    --cyan: #68ceff;
+    --f: #5c9eff;
+    --d: #5cf284;
+    --c: #ff6a66;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'JetBrains Mono', 'SF Mono', 'DejaVu Sans Mono', ui-monospace, monospace; }
+  #app { display: grid; grid-template-columns: 1fr 460px; grid-template-rows: 64px 1fr 150px;
+    height: 100vh; gap: 10px; padding: 10px; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px;
+    border: 1px solid var(--rule); background: var(--panel); border-radius: 8px; padding: 0 18px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: 0.06em; }
+  header h1 span { color: var(--amber); }
+  header .sub { color: var(--dim); font-size: 12px; }
+  header .spacer { flex: 1; }
+  .badge { font-size: 11px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--rule);
+    color: var(--dim); }
+  .badge.ok { color: var(--green); border-color: #24503f; }
+  .badge.warn { color: var(--amber); border-color: #4b3a18; }
+  .badge.bad { color: var(--red); border-color: #4d2523; }
+
+  #bench { position: relative; border: 1px solid var(--rule); background: var(--panel);
+    border-radius: 8px; overflow: hidden; }
+  #canvas { width: 100%; height: 100%; display: block; }
+  .bench-label { position: absolute; top: 12px; left: 16px; font-size: 11px; color: var(--dim);
+    letter-spacing: 0.08em; }
+  .bench-legend { position: absolute; bottom: 12px; left: 16px; display: flex; gap: 16px;
+    font-size: 11px; }
+  .bench-legend i { display: inline-block; width: 10px; height: 2px; margin-right: 6px;
+    vertical-align: middle; }
+
+  #side { border: 1px solid var(--rule); background: var(--panel); border-radius: 8px;
+    padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .sect { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel2); padding: 12px; }
+  .sect h2 { font-size: 11px; color: var(--dim); margin: 0 0 10px; letter-spacing: 0.1em;
+    font-weight: 600; text-transform: uppercase; }
+  .row { display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; padding: 4px 0; }
+  .row .k { color: var(--dim); }
+  .row .v { color: var(--text); }
+  input[type=range] { width: 100%; accent-color: var(--amber); }
+  .ctl { margin-bottom: 10px; }
+  .ctl .lab { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .ctl .lab b { color: var(--amber); font-weight: 600; }
+  select, button { background: var(--panel); color: var(--text); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 7px 10px; font-family: inherit; font-size: 13px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--amber); color: var(--amber); }
+  button.primary { background: #2a2110; border-color: #6d5321; color: var(--amber); }
+  button.primary:hover { background: #3a2d16; }
+  #spots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .spot { border: 1px solid var(--rule); border-radius: 6px; padding: 6px; background: var(--panel); }
+  .spot canvas { width: 100%; height: 120px; display: block; }
+  .spot .cap { font-size: 10px; color: var(--dim); display: flex; justify-content: space-between; }
+  #plot { width: 100%; height: 96px; display: block; }
+  #log { grid-column: 1 / -1; border: 1px solid var(--rule); background: var(--panel);
+    border-radius: 8px; padding: 10px 14px; overflow-y: auto; font-size: 12px; color: var(--dim); }
+  #log b { color: var(--text); }
+  .flash { animation: flash 0.5s ease-out; }
+  @keyframes flash { from { background: #1e2a1c; } to { background: var(--panel2); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>OPTIC<span>RAFT</span></h1>
+    <div class="sub">first-principles ray tracer · DLS optimizer · diffraction metrology</div>
+    <div class="spacer"></div>
+    <div class="badge" id="status">loading…</div>
+  </header>
+
+  <div id="bench">
+    <canvas id="canvas"></canvas>
+    <div class="bench-label" id="benchLabel">BENCH · SAGITTAL CROSS-SECTION</div>
+    <div class="bench-legend">
+      <span><i style="background:var(--f)"></i>F 486.1 nm</span>
+      <span><i style="background:var(--d)"></i>d 587.6 nm</span>
+      <span><i style="background:var(--c)"></i>C 656.3 nm</span>
+      <span style="color:var(--amber)">◯ Airy radius</span>
+    </div>
+  </div>
+
+  <div id="side">
+    <div class="sect">
+      <h2>Preset</h2>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <select id="preset" style="flex:1">
+          <option value="singlet">Singlet (f/2)</option>
+          <option value="asphere">Aspheric singlet</option>
+          <option value="achromat" selected>Achromat (f/4)</option>
+          <option value="triplet">Cooke triplet</option>
+        </select>
+        <button class="primary" id="optimize">Auto-optimize (DLS)</button>
+      </div>
+    </div>
+
+    <div class="sect">
+      <h2>Controls</h2>
+      <div class="ctl">
+        <div class="lab"><span>aperture</span><b id="apVal">25.0 mm</b></div>
+        <input type="range" id="aperture" min="2" max="25" step="0.5" value="25">
+      </div>
+      <div class="ctl">
+        <div class="lab"><span>field angle</span><b id="fdVal">0.0°</b></div>
+        <input type="range" id="field" min="0" max="10" step="0.5" value="0">
+      </div>
+      <div class="ctl">
+        <div class="lab"><span>conic k (surface 1)</span><b id="kVal">0.00</b></div>
+        <input type="range" id="conic" min="-6" max="2" step="0.05" value="0">
+      </div>
+    </div>
+
+    <div class="sect">
+      <h2>Telemetry</h2>
+      <div class="row"><span class="k">EFL</span><span class="v" id="tEfl">—</span></div>
+      <div class="row"><span class="k">f/#</span><span class="v" id="tFn">—</span></div>
+      <div class="row"><span class="k">RMS spot</span><span class="v" id="tRms">—</span></div>
+      <div class="row"><span class="k">Airy radius</span><span class="v" id="tAiry">—</span></div>
+      <div class="row"><span class="k">vs Airy</span><span class="v" id="tRatio">—</span></div>
+      <div class="row"><span class="k">LSA</span><span class="v" id="tLsa">—</span></div>
+      <div class="row"><span class="k">colour (C→F)</span><span class="v" id="tCol">—</span></div>
+      <div class="row"><span class="k">MTF50</span><span class="v" id="tMtf">—</span></div>
+    </div>
+
+    <div class="sect">
+      <h2>Spot diagram</h2>
+      <div id="spots">
+        <div class="spot"><canvas data-band="F"></canvas><div class="cap"><span style="color:var(--f)">F</span><span data-rms="F">—</span></div></div>
+        <div class="spot"><canvas data-band="d"></canvas><div class="cap"><span style="color:var(--d)">d</span><span data-rms="d">—</span></div></div>
+        <div class="spot"><canvas data-band="C"></canvas><div class="cap"><span style="color:var(--c)">C</span><span data-rms="C">—</span></div></div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <h2>Transverse ray fan</h2>
+      <canvas id="plot"></canvas>
+    </div>
+  </div>
+
+  <div id="log"><b>opticraft</b> — press a preset, drag the sliders, or run the optimizer. Every number is computed server-side.</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const bands = { F: '--f', d: '--d', C: '--c' };
+let state = null;
+let conicOffset = 0;
+
+function log(msg) {
+  const el = $('#log');
+  el.innerHTML = `<b>${new Date().toLocaleTimeString()}</b> — ${msg}`;
+}
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+  return r.json();
+}
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+// ---------- bench drawing ----------
+function drawBench(payload) {
+  const cv = $('#canvas');
+  const rect = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = rect.width * dpr;
+  cv.height = rect.height * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  const surfaces = payload.surfaces;
+  const ap = payload.aperture_mm;
+  const track = surfaces.slice(0, -1).reduce((a, s) => a + s.thickness_mm, 0);
+  let zmax = track;
+  for (const band of Object.values(payload.bundles)) {
+    for (const ray of band.rays) for (const p of ray.points) zmax = Math.max(zmax, p[2]);
+  }
+  zmax *= 1.05;
+
+  // piecewise scale: magnified glass zone, compressed air path
+  const padL = 60, padR = 60;
+  const glassPx = Math.min(rect.width * 0.22, track * 26);
+  const glassScale = glassPx / track;
+  const airScale = (rect.width - padL - padR - glassPx) / (zmax - track);
+  const yScale = (rect.width - padL - padR) / zmax * 0.9;
+  const cx = padL, cy = rect.height / 2;
+  const proj = (z, y) => {
+    const xs = z <= track ? cx + z * glassScale : cx + glassPx + (z - track) * airScale;
+    return [xs, cy - y * yScale];
+  };
+
+  // axis
+  ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padL - 20, cy); ctx.lineTo(rect.width - 20, cy); ctx.stroke();
+
+  // glass elements
+  surfaces.slice(0, -1).forEach((s, i) => {
+    if (!s.glass_after) return;
+    const next = surfaces[i + 1];
+    const n = 30, pts = [];
+    for (let k = 0; k < n; k++) {
+      const r = -ap / 2 + ap * k / (n - 1);
+      pts.push(proj(s.vertex_z_mm + sag(s, r), r));
+    }
+    for (let k = 0; k < n; k++) {
+      const r = ap / 2 - ap * k / (n - 1);
+      pts.push(proj(next.vertex_z_mm + sag(next, r), r));
+    }
+    const grad = ctx.createLinearGradient(cx, 0, cx + glassPx, 0);
+    grad.addColorStop(0, 'rgba(70,120,170,0.32)');
+    grad.addColorStop(1, 'rgba(110,170,220,0.18)');
+    ctx.beginPath();
+    pts.forEach((p, k) => k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.strokeStyle = 'rgba(150,200,240,0.85)'; ctx.lineWidth = 1.2; ctx.stroke();
+  });
+
+  // rays
+  for (const [label, band] of Object.entries(payload.bundles)) {
+    ctx.strokeStyle = band === payload.bundles[band.label] ? css('--text') : css(bands[label]);
+    ctx.strokeStyle = css(bands[label]);
+    ctx.lineWidth = 1;
+    for (const ray of band.rays) {
+      if (ray.points.length < 2) continue;
+      ctx.beginPath();
+      ray.points.forEach((p, k) => {
+        const q = proj(p[2], p[1]);
+        k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+      });
+      if (ray.status === 'ok') {
+        const a = proj(ray.points.at(-2)[2], ray.points.at(-2)[1]);
+        const b = proj(ray.points.at(-1)[2], ray.points.at(-1)[1]);
+        ctx.lineTo(b[0] + (b[0] - a[0]) * 1.4, b[1] + (b[1] - a[1]) * 1.4);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // image plane
+  const px = proj(zmax * 0.995, 0);
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = css('--amber');
+  ctx.beginPath(); ctx.moveTo(px[0], 40); ctx.lineTo(px[0], rect.height - 40); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = css('--amber');
+  ctx.font = '11px ' + (getComputedStyle(document.body).fontFamily);
+  ctx.fillText('image plane', px[0] - 34, 30);
+}
+
+function sag(s, r) {
+  const c = s.radius_mm ? 1 / s.radius_mm : 0;
+  const k = s.conic || 0;
+  let z = 0;
+  if (c) {
+    const root = 1 - (1 + k) * c * c * r * r;
+    if (root >= 0) z = c * r * r / (1 + Math.sqrt(root));
+  }
+  z += (s.a4 || 0) * Math.pow(r, 4) + (s.a6 || 0) * Math.pow(r, 6);
+  return z;
+}
+
+// ---------- spot diagrams ----------
+function drawSpots(payload) {
+  document.querySelectorAll('.spot canvas').forEach(cv => {
+    const band = cv.dataset.band;
+    const sp = payload.bundles[band].spot;
+    const rect = cv.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = rect.width * dpr; cv.height = rect.height * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    const cxm = rect.width / 2, cym = rect.height / 2;
+    const rmax = Math.min(cxm, cym) - 8;
+    const maxR = Math.max(...['F', 'd', 'C'].map(b => payload.bundles[b].spot.geometric_radius_mm), 1e-9);
+    const scale = rmax / maxR;
+    // airy circle
+    const ar = sp.airy_radius_mm * scale;
+    ctx.strokeStyle = css('--amber'); ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cxm, cym, Math.max(1.5, ar), 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = css(bands[band]);
+    for (const [x, y] of sp.points) {
+      const px = cxm + (x - sp.centroid_mm[0]) * scale;
+      const py = cym - (y - sp.centroid_mm[1]) * scale;
+      if (Math.hypot(px - cxm, py - cym) <= rmax + 4) {
+        ctx.beginPath(); ctx.arc(px, py, 1.7, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    const lab = document.querySelector(`[data-rms="${band}"]`);
+    if (lab) lab.textContent = `${(sp.rms_radius_mm * 1000).toFixed(1)} µm`;
+  });
+}
+
+// ---------- ray fan ----------
+function drawFan(payload) {
+  const cv = $('#plot');
+  const rect = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = rect.width * dpr; cv.height = rect.height * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  const band = payload.bundles['d'];
+  const rays = band.rays.filter(r => r.status === 'ok');
+  if (rays.length < 2) return;
+  let maxY = 1e-9;
+  for (const r of rays) maxY = Math.max(maxY, Math.abs(r.points.at(-1)[1] - 0));
+  const cym = rect.height / 2;
+  const padX = 24;
+  ctx.strokeStyle = css('--rule');
+  ctx.beginPath(); ctx.moveTo(padX, cym); ctx.lineTo(rect.width - padX, cym); ctx.stroke();
+  ctx.strokeStyle = css('--d'); ctx.lineWidth = 1.6; ctx.beginPath();
+  rays.forEach((r, i) => {
+    const x = padX + (rect.width - 2 * padX) * (i / (rays.length - 1));
+    const y = cym - (r.points.at(-1)[1] / maxY) * (rect.height / 2 - 10);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = css('--dimmer'); ctx.font = '10px monospace';
+  ctx.fillText(`EY vs PY · ${(maxY * 1000).toFixed(1)} µm full scale`, padX, 12);
+}
+
+// ---------- telemetry ----------
+function setTel(payload) {
+  const s = payload.summary;
+  $('#tEfl').textContent = `${s.efl_mm.toFixed(3)} mm`;
+  $('#tFn').textContent = s.f_number.toFixed(2);
+  $('#tRms').textContent = `${(s.rms_mm * 1000).toFixed(2)} µm`;
+  $('#tAiry').textContent = `${(s.airy_radius_mm * 1000).toFixed(2)} µm`;
+  $('#tRatio').textContent = `${s.ratio_to_airy.toFixed(2)}×`;
+  $('#tLsa').textContent = `${s.lsa_mm.toFixed(4)} mm`;
+  $('#tCol').textContent = `${s.colour_shift_mm.toFixed(4)} mm`;
+  $('#tMtf').textContent = payload.mtf && payload.mtf.mtf50_lp_per_mm
+    ? `${payload.mtf.mtf50_lp_per_mm.toFixed(0)} lp/mm` : '—';
+  const badge = $('#status');
+  badge.textContent = s.verdict;
+  badge.className = 'badge ' + (s.ratio_to_airy < 2 ? 'ok' : s.ratio_to_airy < 20 ? 'warn' : 'bad');
+  $('#benchLabel').textContent = `BENCH · ${payload.title} · ${payload.aperture_mm.toFixed(1)} mm · field ${payload.field_deg}°`;
+}
+
+// ---------- render cycle ----------
+async function refresh() {
+  const preset = $('#preset').value;
+  const ap = parseFloat($('#aperture').value);
+  const fd = parseFloat($('#field').value);
+  const q = new URLSearchParams({ preset, aperture_mm: ap, field_deg: fd });
+  log(`computing ${preset} @ ${ap} mm, field ${fd}°`);
+  try {
+    state = await api(`/api/design?${q}`);
+    drawBench(state); drawSpots(state); drawFan(state); setTel(state);
+    log(`${preset}: ${state.summary.verdict} — RMS ${(state.summary.rms_mm * 1000).toFixed(2)} µm, ` +
+        `${state.summary.ratio_to_airy.toFixed(1)}× the Airy radius`);
+  } catch (e) { log(`error: ${e.message}`); }
+}
+
+async function optimize() {
+  const preset = $('#preset').value;
+  log('running damped least squares …');
+  $('#optimize').disabled = true;
+  try {
+    const res = await api(`/api/optimize?${new URLSearchParams({ preset, iterations: 22 })}`);
+    log(`DLS: merit ${res.before.merit_mm2.toExponential(2)} → ${res.after.merit_mm2.toExponential(2)} ` +
+        `(${res.improvement}×) in ${res.run.iterations} iterations · ${res.run.stopped_because}`);
+    $('#preset').value = preset;
+    await refresh();
+  } catch (e) { log(`optimizer error: ${e.message}`); }
+  $('#optimize').disabled = false;
+}
+
+// ---------- wiring ----------
+$('#aperture').addEventListener('input', e => { $('#apVal').textContent = `${e.target.value} mm`; });
+$('#field').addEventListener('input', e => { $('#fdVal').textContent = `${e.target.value}°`; });
+$('#conic').addEventListener('input', e => { $('#kVal').textContent = e.target.value; });
+let timer = null;
+const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, 220); };
+['#aperture', '#field'].forEach(s => $(s).addEventListener('input', schedule));
+$('#preset').addEventListener('change', refresh);
+$('#optimize').addEventListener('click', optimize);
+window.addEventListener('resize', () => { if (state) { drawBench(state); drawSpots(state); drawFan(state); } });
+
+// boot
+log('connecting to engine …');
+api('/api/presets').then(d => {
+  log(`${d.presets.length} presets · ${d.glasses.length} glasses loaded from the engine`);
+  return refresh();
+}).catch(e => log(`cannot reach the engine: ${e.message}`));
+</script>
+</body>
+</html>
